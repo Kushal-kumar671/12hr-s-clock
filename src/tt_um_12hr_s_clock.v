@@ -80,7 +80,8 @@ module tt_um_12hr_s_clock (
     assign uio_oe = 8'hFF;
     
     // Prevent synthesis warnings for unused inputs
-    wire _unused_ok = &{ui_in, uio_in, seconds[1:0], 1'b0};
+   wire _unused_ok = &ui_in & &uio_in & &seconds[1:0];
+
 
 endmodule
 
