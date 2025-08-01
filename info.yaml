@@ -1,56 +1,135 @@
-# Tiny Tapeout project information
 project:
-  title:        ""      # Project title
-  author:       ""      # Your name
-  discord:      ""      # Your discord username, for communication and automatically assigning you a Tapeout role (optional)
-  description:  ""      # One line description of what your project does
-  language:     "Verilog" # other examples include SystemVerilog, Amaranth, VHDL, etc
-  clock_hz:     0       # Clock frequency in Hz (or 0 if not applicable)
+  title: "12-Hour Digital Clock"
+  author: "kushal"
+  description: "A 12-hour digital clock with AM/PM indication that outputs time in binary format"
+  language: "Verilog"
+  clock_hz: 10000000  # 10MHz
+  tiles: "1x1"
 
-  # How many tiles your design occupies? A single tile is about 167x108 uM.
-  tiles: "1x1"          # Valid values: 1x1, 1x2, 2x2, 3x2, 4x2, 6x2 or 8x2
+# Wokwi project information (if applicable)
+wokwi:
+  wokwi_id: 0  # Set to 0 if not using Wokwi
 
-  # Your top module name must start with "tt_um_". Make it unique by including your github username:
-  top_module:  "tt_um_example"
+# Source files
+source_files:
+  - tt_um_clock_12h.v
 
-  # List your project's source files here.
-  # Source files must be in ./src and you must list each source file separately, one per line.
-  # Don't forget to also update `PROJECT_SOURCES` in test/Makefile.
-  source_files:
-    - "project.v"
+# Top module
+top_module: "tt_um_clock_12h"
 
-# The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
-# This section is for the datasheet/website. Use descriptive names (e.g., RX, TX, MOSI, SCL, SEG_A, etc.).
-pinout:
-  # Inputs
-  ui[0]: ""
-  ui[1]: ""
-  ui[2]: ""
-  ui[3]: ""
-  ui[4]: ""
-  ui[5]: ""
-  ui[6]: ""
-  ui[7]: ""
+# Pin assignments and descriptions
+pins:
+  # Dedicated inputs (ui_in[7:0])
+  ui_in:
+    - description: "Unused input 0"
+    - description: "Unused input 1"
+    - description: "Unused input 2"
+    - description: "Unused input 3"
+    - description: "Unused input 4"
+    - description: "Unused input 5"
+    - description: "Unused input 6"
+    - description: "Unused input 7"
 
-  # Outputs
-  uo[0]: ""
-  uo[1]: ""
-  uo[2]: ""
-  uo[3]: ""
-  uo[4]: ""
-  uo[5]: ""
-  uo[6]: ""
-  uo[7]: ""
+  # Dedicated outputs (uo_out[7:0])
+  uo_out:
+    - description: "Hours bit 0"
+    - description: "Hours bit 1"
+    - description: "Hours bit 2"
+    - description: "Hours bit 3"
+    - description: "AM/PM (0=AM, 1=PM)"
+    - description: "Minutes bit 4"
+    - description: "Minutes bit 5"
+    - description: "Unused output 7"
 
-  # Bidirectional pins
-  uio[0]: ""
-  uio[1]: ""
-  uio[2]: ""
-  uio[3]: ""
-  uio[4]: ""
-  uio[5]: ""
-  uio[6]: ""
-  uio[7]: ""
+  # Bidirectional pins (uio[7:0]) - configured as outputs
+  uio:
+    - description: "Seconds bit 2 (MSB of available seconds)"
+    - description: "Seconds bit 3"
+    - description: "Seconds bit 4"
+    - description: "Seconds bit 5 (MSB)"
+    - description: "Minutes bit 0 (LSB)"
+    - description: "Minutes bit 1"
+    - description: "Minutes bit 2"
+    - description: "Minutes bit 3"
 
-# Do not change!
-yaml_version: 6
+# Documentation
+documentation:
+  description: |
+    This project implements a 12-hour digital clock that counts seconds, minutes, and hours 
+    with AM/PM indication. The clock starts at 12:00:00 AM on reset and counts continuously.
+    
+    The design includes a clock divider to generate 1-second ticks from the input clock.
+    Time values are output in binary format across the available pins.
+    
+    **Clock Format:**
+    - Hours: 1-12 (not 0-11)
+    - Minutes: 0-59
+    - Seconds: 0-59 (only upper 4 bits available on outputs)
+    - AM/PM: 0=AM, 1=PM
+    
+    **Pin Mapping:**
+    - uo_out[3:0]: Hours (1-12)
+    - uo_out[4]: AM/PM flag
+    - uo_out[7:5]: Upper 3 bits of minutes
+    - uio_out[7:4]: Lower 4 bits of minutes
+    - uio_out[3:0]: Upper 4 bits of seconds
+    
+    **Operation:**
+    1. Apply reset (rst_n low) to initialize to 12:00:00 AM
+    2. Release reset and enable (ena high)
+    3. Clock will increment every second based on input clock frequency
+    4. Time transitions: 12:59:59 AM → 1:00:00 AM → ... → 12:59:59 PM → 1:00:00 PM → ...
+
+  how_it_works: |
+    The clock uses a counter-based approach with the following components:
+    
+    1. **Clock Divider**: Divides the input clock to create 1-second timing pulses
+    2. **Seconds Counter**: Counts 0-59, rolls over to minutes
+    3. **Minutes Counter**: Counts 0-59, rolls over to hours
+    4. **Hours Counter**: Counts 1-12, handles AM/PM transitions
+    5. **AM/PM Logic**: Toggles when transitioning from 11:59:59 to 12:00:00
+    
+    The design correctly handles the 12-hour format where:
+    - 12:00:00 AM is midnight (start of day)
+    - 12:59:59 AM is followed by 1:00:00 AM
+    - 12:00:00 PM is noon
+    - 12:59:59 PM is followed by 1:00:00 PM
+
+  how_to_test: |
+    1. **Reset Test**: Assert rst_n low, verify clock shows 12:00:00 AM
+    2. **Basic Counting**: Release reset and verify seconds increment
+    3. **Minute Rollover**: Fast-forward to test 59→0 seconds transition
+    4. **Hour Rollover**: Test minute 59→0 transition
+    5. **12-Hour Format**: Verify 12→1 hour transition
+    6. **AM/PM Toggle**: Verify AM/PM changes at 11:59:59→12:00:00
+    
+    Use the provided testbench or connect LEDs/7-segment displays to monitor outputs.
+    
+    **Expected Behavior:**
+    - Clock starts at 12:00:00 AM
+    - Counts continuously: seconds → minutes → hours
+    - Proper 12-hour format (1-12, not 0-11)
+    - AM/PM toggles correctly
+
+  external_hw: |
+    **Recommended External Hardware:**
+    - 4x 7-segment displays for time display
+    - LED for AM/PM indication
+    - Reset button connected to rst_n
+    - Optional: Crystal oscillator for accurate timing
+    
+    **Pin Connections:**
+    - Connect uo_out[3:0] to hours display decoder
+    - Connect combined minutes bits to minutes display decoder
+    - Connect uo_out[4] to AM/PM LED
+    - Connect available seconds bits to seconds display (limited resolution)
+
+# Testing
+test:
+  cocotb:
+    - test.py
+  
+# Build configuration
+build:
+  # Standard TinyTapeout build
+  target: "sky130"

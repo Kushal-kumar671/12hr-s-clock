@@ -1,42 +1,61 @@
-# Makefile
-# See https://docs.cocotb.org/en/stable/quickstart.html for more info
+# Makefile for TinyTapeout 12-Hour Clock
 
-# defaults
-SIM ?= icarus
-TOPLEVEL_LANG ?= verilog
-SRC_DIR = $(PWD)/../src
-PROJECT_SOURCES = project.v
+# Default target
+all: sim
 
-ifneq ($(GATES),yes)
+# Simulation with iverilog
+sim: tb.vcd
+	@echo "Simulation completed. View tb.vcd with gtkwave."
 
-# RTL simulation:
-SIM_BUILD				= sim_build/rtl
-VERILOG_SOURCES += $(addprefix $(SRC_DIR)/,$(PROJECT_SOURCES))
+tb.vcd: tb.v tt_um_clock_12h.v
+	iverilog -o tb tb.v tt_um_clock_12h.v
+	vvp tb
+	@echo "VCD file generated: tb.vcd"
 
-else
+# Cocotb test
+test:
+	$(MAKE) -f Makefile.cocotb
 
-# Gate level simulation:
-SIM_BUILD				= sim_build/gl
-COMPILE_ARGS    += -DGL_TEST
-COMPILE_ARGS    += -DFUNCTIONAL
-COMPILE_ARGS    += -DSIM
-VERILOG_SOURCES += $(PDK_ROOT)/ihp-sg13g2/libs.ref/sg13g2_io/verilog/sg13g2_io.v
-VERILOG_SOURCES += $(PDK_ROOT)/ihp-sg13g2/libs.ref/sg13g2_stdcell/verilog/sg13g2_stdcell.v
+# Create Makefile.cocotb for cocotb testing
+Makefile.cocotb:
+	@echo "# Cocotb Makefile" > Makefile.cocotb
+	@echo "TOPLEVEL_LANG = verilog" >> Makefile.cocotb
+	@echo "VERILOG_SOURCES = tt_um_clock_12h.v" >> Makefile.cocotb
+	@echo "TOPLEVEL = tt_um_clock_12h" >> Makefile.cocotb
+	@echo "MODULE = test" >> Makefile.cocotb
+	@echo "include \$$(shell cocotb-config --makefiles)/Makefile.sim" >> Makefile.cocotb
 
-# this gets copied in by the GDS action workflow
-VERILOG_SOURCES += $(PWD)/gate_level_netlist.v
+# Synthesis check (requires yosys)
+synth: tt_um_clock_12h.v
+	yosys -p "read_verilog tt_um_clock_12h.v; synth -top tt_um_clock_12h; stat"
 
-endif
+# Format check (requires verilator)
+lint: tt_um_clock_12h.v
+	verilator --lint-only --Wall tt_um_clock_12h.v
 
-# Allow sharing configuration between design and testbench via `include`:
-COMPILE_ARGS 		+= -I$(SRC_DIR)
+# Clean generated files
+clean:
+	rm -f tb tb.vcd
+	rm -f *.log *.jou
+	rm -rf sim_build/
+	rm -f results.xml
+	rm -f Makefile.cocotb
 
-# Include the testbench sources:
-VERILOG_SOURCES += $(PWD)/tb.v
-TOPLEVEL = tb
+# View waveforms (requires gtkwave)
+wave: tb.vcd
+	gtkwave tb.vcd &
 
-# MODULE is the basename of the Python test file
-MODULE = test
+# Help
+help:
+	@echo "Available targets:"
+	@echo "  all      - Run basic simulation (default)"
+	@echo "  sim      - Run iverilog simulation"
+	@echo "  test     - Run cocotb tests"
+	@echo "  synth    - Run synthesis check with yosys"
+	@echo "  lint     - Run lint check with verilator"
+	@echo "  wave     - View waveforms with gtkwave"
+	@echo "  clean    - Clean generated files"
+	@echo "  help     - Show this help"
 
-# include cocotb's make rules to take care of the simulator setup
-include $(shell cocotb-config --makefiles)/Makefile.sim
+# Phony targets
+.PHONY: all sim test synth lint clean wave help

@@ -1,41 +1,151 @@
-![](../../workflows/gds/badge.svg) ![](../../workflows/docs/badge.svg) ![](../../workflows/test/badge.svg) ![](../../workflows/fpga/badge.svg)
+# 12-Hour Digital Clock - TinyTapeout Project
 
-# Tiny Tapeout Verilog Project Template
+A 12-hour digital clock implementation for TinyTapeout that displays time in binary format with AM/PM indication.
 
-- [Read the documentation for project](docs/info.md)
+## Overview
 
-## What is Tiny Tapeout?
+This project implements a complete 12-hour digital clock that:
+- Counts seconds, minutes, and hours in proper 12-hour format (1-12)
+- Includes AM/PM indication
+- Starts at 12:00:00 AM on reset
+- Outputs time values in binary across available pins
 
-Tiny Tapeout is an educational project that aims to make it easier and cheaper than ever to get your digital and analog designs manufactured on a real chip.
+## How It Works
 
-To learn more and get started, visit https://tinytapeout.com.
+### Clock Architecture
+```
+Input Clock → Clock Divider → Second Counter → Minute Counter → Hour Counter
+                    ↓              ↓              ↓             ↓
+               1 Second Tick    0-59 Seconds   0-59 Minutes  1-12 Hours + AM/PM
+```
 
-## Set up your Verilog project
+### Key Components
 
-1. Add your Verilog files to the `src` folder.
-2. Edit the [info.yaml](info.yaml) and update information about your project, paying special attention to the `source_files` and `top_module` properties. If you are upgrading an existing Tiny Tapeout project, check out our [online info.yaml migration tool](https://tinytapeout.github.io/tt-yaml-upgrade-tool/).
-3. Edit [docs/info.md](docs/info.md) and add a description of your project.
-4. Adapt the testbench to your design. See [test/README.md](test/README.md) for more information.
+1. **Clock Divider**: Generates 1-second pulses from the input clock (assumes 10MHz)
+2. **Cascaded Counters**: Seconds overflow to minutes, minutes overflow to hours
+3. **12-Hour Logic**: Properly handles 12→1 transitions and AM/PM switching
+4. **Reset Logic**: Initializes to 12:00:00 AM (midnight)
 
-The GitHub action will automatically build the ASIC files using [OpenLane](https://www.zerotoasiccourse.com/terminology/openlane/).
+### Pin Mapping
 
-## Enable GitHub actions to build the results page
+| Pin Range | Function | Description |
+|-----------|----------|-------------|
+| `uo_out[3:0]` | Hours | Binary hours (1-12) |
+| `uo_out[4]` | AM/PM | 0=AM, 1=PM |
+| `uo_out[7:5]` | Minutes[6:4] | Upper 3 bits of minutes |
+| `uio_out[7:4]` | Minutes[3:0] | Lower 4 bits of minutes |
+| `uio_out[3:0]` | Seconds[5:2] | Upper 4 bits of seconds |
 
-- [Enabling GitHub Pages](https://tinytapeout.com/faq/#my-github-action-is-failing-on-the-pages-part)
+## Files Description
 
-## Resources
+- **`tt_um_clock_12h.v`**: Main Verilog module
+- **`tb.v`**: Verilog testbench for basic simulation
+- **`test.py`**: Cocotb Python test suite
+- **`info.yaml`**: TinyTapeout project configuration
+- **`Makefile`**: Build and test automation
+- **`README.md`**: This documentation
 
-- [FAQ](https://tinytapeout.com/faq/)
-- [Digital design lessons](https://tinytapeout.com/digital_design/)
-- [Learn how semiconductors work](https://tinytapeout.com/siliwiz/)
-- [Join the community](https://tinytapeout.com/discord)
-- [Build your design locally](https://www.tinytapeout.com/guides/local-hardening/)
+## Testing
 
-## What next?
+### Quick Test with iverilog
+```bash
+make sim
+make wave  # View waveforms
+```
 
-- [Submit your design to the next shuttle](https://app.tinytapeout.com/).
-- Edit [this README](README.md) and explain your design, how it works, and how to test it.
-- Share your project on your social network of choice:
-  - LinkedIn [#tinytapeout](https://www.linkedin.com/search/results/content/?keywords=%23tinytapeout) [@TinyTapeout](https://www.linkedin.com/company/100708654/)
-  - Mastodon [#tinytapeout](https://chaos.social/tags/tinytapeout) [@matthewvenn](https://chaos.social/@matthewvenn)
-  - X (formerly Twitter) [#tinytapeout](https://twitter.com/hashtag/tinytapeout) [@tinytapeout](https://twitter.com/tinytapeout)
+### Comprehensive Test with Cocotb
+```bash
+make test
+```
+
+### Synthesis Check
+```bash
+make synth  # Requires yosys
+make lint   # Requires verilator
+```
+
+## Usage Instructions
+
+### Hardware Setup
+1. Connect your external display hardware to decode the binary outputs
+2. Use `uo_out[4]` to drive an AM/PM indicator LED
+3. Connect a reset button to `rst_n` (active low)
+
+### Software Operation
+1. **Reset**: Pull `rst_n` low to initialize clock to 12:00:00 AM
+2. **Enable**: Set `ena` high to start clock operation
+3. **Read Time**: Decode binary values from output pins
+
+### Example Time Decoding (Verilog)
+```verilog
+wire [3:0] hours = uo_out[3:0];
+wire am_pm = uo_out[4];
+wire [5:0] minutes = {uo_out[7:5], uio_out[7:4]};
+wire [5:0] seconds = {uio_out[3:0], 2'b00}; // Only upper 4 bits available
+```
+
+## Design Features
+
+### 12-Hour Format Compliance
+- Hours count 1→2→...→11→12→1→... (not 0-based)
+- AM/PM toggles at 11:59:59→12:00:00 transitions
+- Midnight starts as 12:00:00 AM
+- Noon is 12:00:00 PM
+
+### Clock Accuracy
+- Uses parametrizable clock divider
+- Default assumes 10MHz input clock
+- Adjust `clk_div` comparison value for different frequencies
+
+### Reset Behavior
+- Synchronous reset with active-low `rst_n`
+- Always resets to 12:00:00 AM (midnight)
+- Clean startup guaranteed
+
+## Customization
+
+### Clock Frequency Adjustment
+Modify the clock divider in `tt_um_clock_12h.v`:
+```verilog
+// For 10MHz clock: 10,000,000 - 1 = 9,999,999
+wire sec_tick = (clk_div == 24'd9_999_999);
+
+// For different frequencies, adjust this value:
+// Formula: (clock_freq_hz - 1)
+```
+
+### Extended Outputs
+Current design uses most available pins. To add features:
+- Use spare `uo_out[7:5]` bits for additional functionality
+- Consider multiplexing if more outputs needed
+
+## Verification
+
+The design has been verified to:
+- ✅ Start correctly at 12:00:00 AM
+- ✅ Count seconds, minutes, hours properly
+- ✅ Handle 59→0 rollovers correctly
+- ✅ Maintain proper 12-hour format
+- ✅ Toggle AM/PM at correct times
+- ✅ Reset reliably to initial state
+
+## Known Limitations
+
+1. **Seconds Resolution**: Only upper 4 bits of seconds available on outputs
+2. **Clock Accuracy**: Depends on input clock stability
+3. **No Time Setting**: Clock always starts from 12:00:00 AM (could be extended)
+
+## Future Enhancements
+
+- Add time-setting inputs using `ui_in` pins
+- Implement alarm functionality
+- Add different time formats (24-hour mode)
+- Include day/date counting
+
+## License
+
+This project is open source and suitable for educational and commercial use.
+
+---
+
+*Created for TinyTapeout - bringing custom silicon to everyone!*
